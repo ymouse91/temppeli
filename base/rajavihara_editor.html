@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <title>Relics of Rajavihara – Monipulmaeditori (5×8)</title>
+  <style>
+    :root{
+      --cell: 64px;
+      --gap: 4px;
+      --bg: #0f172a;
+      --board: #020617;
+      --grid: #1f2937;
+      --ink: #e5e7eb;
+      --muted: #9ca3af;
+      --crate: #6b4f2a;
+      --ice: #e8f4ff;   /* lähes valkoinen, hieman sinertävä */
+      --boulder: #6b7280;
+      --water: #0ea5e9;
+      --player: #22c55e;
+      --nemesis: #f97316;
+      --gem: #fbbf24;
+      --fire: #b91c1c;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    html,body{height:100%;}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:12px;
+      padding:12px;
+    }
+    h1{
+      margin:4px 0;
+      font-size:1.2rem;
+      text-align:center;
+    }
+    .layout{
+      display:flex;
+      flex-wrap:wrap;
+      gap:16px;
+      justify-content:center;
+      align-items:flex-start;
+      max-width:1200px;
+      width:100%;
+    }
+    .board-wrapper{
+      background:var(--board);
+      padding:8px;
+      border-radius:12px;
+      box-shadow:0 10px 25px rgba(0,0,0,0.5);
+    }
+    .board{
+      display:grid;
+      grid-template-columns: repeat(5, var(--cell));
+      grid-template-rows: repeat(8, var(--cell));
+      gap:var(--gap);
+    }
+    .cell{
+      position:relative;
+      width:var(--cell);
+      height:var(--cell);
+      background:var(--grid);
+      border-radius:6px;
+      overflow:hidden;
+      cursor:pointer;
+    }
+    .cell:hover{
+      outline:2px solid #4b5563;
+    }
+    .cell.fire{
+      background:radial-gradient(circle at center, #f97316 0%, #7f1d1d 55%, #111827 100%);
+    }
+
+    /* Yksi objekti: iso blokki */
+    .block{
+      position:absolute;
+      inset:6px;
+      border-radius:6px;
+      box-shadow:0 2px 4px rgba(0,0,0,0.6);
+    }
+    .block.crate{ background:var(--crate); }
+    .block.ice{ background:var(--ice); }
+    .block.boulder{ background:var(--boulder); }
+    .block.water{ background:var(--water); }
+
+    /* Useampi objekti: kompressoitu pino */
+    .stack{
+      position:absolute;
+      inset:6px;
+      border-radius:6px;
+      display:flex;
+      flex-direction:column-reverse; /* viimeinen run (ylin) ylimmäksi */
+      justify-content:flex-start;
+      gap:2px;
+      padding:3px;
+      background:rgba(0,0,0,0.35);
+      box-shadow:0 2px 4px rgba(0,0,0,0.6);
+    }
+    .seg{
+      width:100%;
+      min-height:6px;
+      border-radius:3px;
+      border:1px solid rgba(15,23,42,0.6);
+      font-size:0.55rem;
+      line-height:1;
+      padding:1px 3px;
+      display:flex;
+      align-items:center;
+      justify-content:flex-start;
+      box-sizing:border-box;
+      color:#f9fafb;
+    }
+    .seg.crate{ background:var(--crate); }
+    .seg.ice{
+      background:var(--ice);
+      color:#0f172a;
+    }
+    .seg.boulder{ background:var(--boulder); }
+    .seg.water{
+      background:var(--water);
+      color:#0f172a;
+    }
+
+    .gem{
+      position:absolute;
+      width:50%;
+      height:50%;
+      border-radius:12px;
+      background:var(--gem);
+      border:3px solid #92400e;
+      box-shadow:0 0 10px rgba(251,191,36,0.8);
+      left:50%;
+      top:12%;
+      transform:translateX(-50%);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:bold;
+      font-size:0.8rem;
+      color:#78350f;
+      pointer-events:none;
+      z-index:2;
+    }
+
+    .player, .nemesis{
+      position:absolute;
+      width:60%;
+      height:60%;
+      border-radius:50%;
+      left:50%;
+      top:50%;
+      transform:translate(-50%,-50%);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:bold;
+      font-size:0.8rem;
+      z-index:3;
+      box-shadow:0 0 0 2px #020617;
+    }
+    .player{
+      background:var(--player);
+      border:3px solid #064e3b;
+      color:#022c22;
+    }
+    .nemesis{
+      background:var(--nemesis);
+      border:3px solid #7c2d12;
+      color:#111827;
+    }
+
+    .status{
+      font-size:0.9rem;
+      color:var(--muted);
+      margin-top:4px;
+      min-height:1.3em;
+    }
+
+    .panel{
+      background:#020617;
+      padding:12px;
+      border-radius:12px;
+      box-shadow:0 10px 25px rgba(0,0,0,0.5);
+      max-width:480px;
+      width:100%;
+    }
+    .panel h2{
+      margin-top:0;
+      font-size:1rem;
+    }
+
+    .tools{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      margin-bottom:8px;
+    }
+    .tools button{
+      border:none;
+      border-radius:999px;
+      padding:4px 10px;
+      background:#111827;
+      color:var(--ink);
+      cursor:pointer;
+      font-size:0.8rem;
+      white-space:nowrap;
+    }
+    .tools button.active{
+      background:#2563eb;
+    }
+
+    .small{
+      font-size:0.8rem;
+      color:var(--muted);
+      margin-top:4px;
+    }
+
+    textarea{
+      width:100%;
+      min-height:180px;
+      background:#020617;
+      color:#e5e7eb;
+      border:1px solid #374151;
+      border-radius:8px;
+      padding:8px;
+      font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,"Liberation Mono","Courier New",monospace;
+      font-size:0.8rem;
+      resize:vertical;
+    }
+
+    .btn-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin:8px 0;
+    }
+    .btn{
+      border:none;
+      border-radius:999px;
+      padding:6px 12px;
+      background:#111827;
+      color:#e5e7eb;
+      cursor:pointer;
+      font-size:0.85rem;
+    }
+    .btn.primary{ background:#16a34a; }
+    .btn.danger{ background:#b91c1c; }
+
+    .puzzle-header{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+      margin-bottom:8px;
+    }
+    .puzzle-header input{
+      flex:1;
+      min-width:160px;
+      border-radius:999px;
+      border:1px solid #374151;
+      padding:4px 10px;
+      background:#020617;
+      color:#e5e7eb;
+      font-size:0.85rem;
+    }
+    .pill{
+      border-radius:999px;
+      padding:4px 10px;
+      background:#111827;
+      font-size:0.8rem;
+    }
+
+    .goals {
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      margin-bottom:12px;
+      font-size:0.85rem;
+    }
+    .goals input {
+      width:80px;
+      margin-left:6px;
+      border-radius:6px;
+      padding:4px 6px;
+      background:#020617;
+      border:1px solid #374151;
+      color:#e5e7eb;
+    }
+
+    #fileInput{
+      display:none;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Relics of Rajavihara – Monipulmaeditori (5×8)</h1>
+
+<div class="layout">
+  <div>
+    <div class="board-wrapper">
+      <div id="board" class="board"></div>
+    </div>
+    <div id="status" class="status"></div>
+    <div class="small">
+      Työkalut: valitse objekti ja klikkaa ruutua.<br/>
+      – Laatikko / Jää / Lohkare / Vesikannu lisäävät pinon päälle.<br/>
+      – Tuli tekee ruudusta tuliruudun (voi olla tyhjässä ruudussa tai lohkareen ruudussa).<br/>
+      – Pelaaja &amp; Nemesis ovat yksittäisiä hahmoja per pulma.<br/>
+      – Gem-napilla voi lisätä tai poistaa gemin ruudusta (useita sallittu).
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="puzzle-header">
+      <span class="pill" id="puzzleIndexLabel">Pulma 1 / 1</span>
+      <input id="puzzleName" type="text" placeholder="Pulman nimi" />
+    </div>
+
+    <h2>Lisätavoitteet</h2>
+    <div class="goals">
+      <label>
+        Sammutettavat tulipalot:
+        <input id="goalFires" type="number" min="0" value="0">
+      </label>
+      <label>
+        Tuhottavat laatikot:
+        <input id="goalCrates" type="number" min="0" value="0">
+      </label>
+    </div>
+
+    <div class="btn-row">
+      <button id="prevPuzzle" class="btn">◀ Edellinen</button>
+      <button id="nextPuzzle" class="btn">Seuraava ▶</button>
+      <button id="addPuzzle" class="btn primary">+ Uusi pulma</button>
+      <button id="deletePuzzle" class="btn danger">Poista pulma</button>
+    </div>
+
+    <h2>Työkalut</h2>
+    <div class="tools">
+      <button data-tool="crate" class="active">Laatikko</button>
+      <button data-tool="ice">Jääkuutio</button>
+      <button data-tool="boulder">Lohkare</button>
+      <button data-tool="water">Vesikannu</button>
+      <button data-tool="removeTop">Poista ylin</button>
+      <button data-tool="clearCell">Tyhjennä ruutu</button>
+      <button data-tool="fire">Tuli päälle/pois</button>
+      <button data-tool="player">Pelaaja</button>
+      <button data-tool="nemesis">Nemesis</button>
+      <button data-tool="gem">Gem päälle/pois</button>
+    </div>
+
+    <div class="btn-row">
+      <button id="clearStacks" class="btn danger">Tyhjennä kaikki pinot</button>
+      <button id="clearAll" class="btn danger">Tyhjennä koko pulma</button>
+    </div>
+
+    <h2>JSON-pulmakokoelma</h2>
+    <div class="btn-row">
+      <button id="exportJson" class="btn primary">Päivitä JSON-teksti</button>
+      <button id="copyJson" class="btn">Kopioi JSON</button>
+    </div>
+    <textarea id="jsonOut" spellcheck="false"></textarea>
+
+    <div class="btn-row">
+      <button id="saveFile" class="btn primary">Tallenna tiedostoon</button>
+      <button id="loadFile" class="btn">Lataa tiedostosta</button>
+      <input id="fileInput" type="file" accept=".json,application/json" />
+    </div>
+
+    <div class="btn-row">
+      <button id="importJson" class="btn">Lataa JSON tekstistä</button>
+    </div>
+    <div class="small">
+      Rakenne: { "width":5, "height":8, "puzzles":[ { "name":"...", "goals":{"fires":0,"crates":0}, "cells":[[...],...] }, ... ] }<br/>
+      Jokainen cell: { "floor":"normal|fire", "stack":[{"type":"crate|ice|boulder|water"},...], "player":bool, "nemesis":bool, "gem":bool }
+    </div>
+  </div>
+</div>
+
+<script>
+const WIDTH = 5;
+const HEIGHT = 8;
+
+function createEmptyCell(){
+  return {
+    floor: 'normal',
+    stack: [],
+    player: false,
+    nemesis: false,
+    gem: false
+  };
+}
+
+function createEmptyPuzzle(name){
+  const cells = [];
+  for(let y=0;y<HEIGHT;y++){
+    const row = [];
+    for(let x=0;x<WIDTH;x++){
+      row.push(createEmptyCell());
+    }
+    cells.push(row);
+  }
+  return {
+    name: name || 'Pulma',
+    goals: {
+      fires: 0,
+      crates: 0
+    },
+    cells
+  };
+}
+
+let levelSet = {
+  width: WIDTH,
+  height: HEIGHT,
+  puzzles: [
+    createEmptyPuzzle('Pulma 1')
+  ]
+};
+
+let currentPuzzleIndex = 0;
+let currentTool = 'crate';
+
+function getCurrentPuzzle(){
+  return levelSet.puzzles[currentPuzzleIndex];
+}
+
+function ensureGoalsForPuzzle(p){
+  if(!p.goals){
+    p.goals = { fires: 0, crates: 0 };
+  } else {
+    if(typeof p.goals.fires !== 'number') p.goals.fires = 0;
+    if(typeof p.goals.crates !== 'number') p.goals.crates = 0;
+  }
+}
+
+function setStatus(msg){
+  document.getElementById('status').textContent = msg || '';
+}
+
+/* ----- pinon kompressio ----- */
+function compressStack(stack){
+  if(stack.length === 0) return [];
+  const runs = [];
+  let currentType = stack[0].type;
+  let count = 1;
+  for(let i=1;i<stack.length;i++){
+    const t = stack[i].type;
+    if(t === currentType){
+      count++;
+    } else {
+      runs.push({ type: currentType, count });
+      currentType = t;
+      count = 1;
+    }
+  }
+  runs.push({ type: currentType, count });
+  return runs;
+}
+
+/* ----- piirto ----- */
+function render(){
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  const puzzle = getCurrentPuzzle();
+  ensureGoalsForPuzzle(puzzle);
+
+  for(let y=0;y<HEIGHT;y++){
+    for(let x=0;x<WIDTH;x++){
+      const cellData = puzzle.cells[y][x];
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      if(cellData.floor === 'fire'){
+        cell.classList.add('fire');
+      }
+      cell.dataset.x = x;
+      cell.dataset.y = y;
+
+      const stack = cellData.stack;
+      const h = stack.length;
+
+      if(h === 1){
+        const type = stack[0].type;
+        const block = document.createElement('div');
+        block.className = 'block ' + type;
+        cell.appendChild(block);
+      } else if(h > 1){
+        const runs = compressStack(stack);
+        const stackDiv = document.createElement('div');
+        stackDiv.className = 'stack';
+        // runs on alhaalta ylöspäin; flex column-reverse nostaa top-runin ylimmäksi
+        for(let i=0;i<runs.length;i++){
+          const run = runs[i];
+          const seg = document.createElement('div');
+          seg.className = 'seg ' + run.type;
+          let label = '?';
+          if(run.type === 'crate') label = 'C';
+          else if(run.type === 'ice') label = 'I';
+          else if(run.type === 'boulder') label = 'B';
+          else if(run.type === 'water') label = 'W';
+
+          seg.textContent = run.count > 1 ? `${label}×${run.count}` : label;
+          stackDiv.appendChild(seg);
+        }
+        cell.appendChild(stackDiv);
+      }
+
+      if(cellData.gem){
+        const gem = document.createElement('div');
+        gem.className = 'gem';
+        gem.textContent = '★';
+        cell.appendChild(gem);
+      }
+
+      if(cellData.player){
+        const p = document.createElement('div');
+        p.className = 'player';
+        p.textContent = 'P';
+        cell.appendChild(p);
+      }
+
+      if(cellData.nemesis){
+        const n = document.createElement('div');
+        n.className = 'nemesis';
+        n.textContent = 'N';
+        cell.appendChild(n);
+      }
+
+      board.appendChild(cell);
+    }
+  }
+
+  document.getElementById('puzzleIndexLabel').textContent =
+    `Pulma ${currentPuzzleIndex+1} / ${levelSet.puzzles.length}`;
+  document.getElementById('puzzleName').value = getCurrentPuzzle().name || '';
+
+  // Päivitä lisätavoitekentät
+  const pz = getCurrentPuzzle();
+  ensureGoalsForPuzzle(pz);
+  const firesInput = document.getElementById('goalFires');
+  const cratesInput = document.getElementById('goalCrates');
+  if(firesInput && cratesInput){
+    firesInput.value = pz.goals.fires ?? 0;
+    cratesInput.value = pz.goals.crates ?? 0;
+  }
+}
+
+/* ----- säännöt ----- */
+function canPlaceOnStack(cell, newType){
+  if(cell.floor === 'fire') return false;
+  const stack = cell.stack;
+  if(stack.length === 0) return true;
+  const hasWater = stack.some(o => o.type === 'water');
+  if(hasWater){
+    return newType === 'water';
+  }
+  return true;
+}
+
+function toggleFire(cell){
+  if(cell.floor === 'fire'){
+    cell.floor = 'normal';
+    setStatus('Tuli poistettu ruudusta.');
+    return;
+  }
+
+  // Ei koskaan samaan ruutuun pelaajan, Nemesiksen tai gemin kanssa
+  if(cell.player || cell.nemesis || cell.gem){
+    setStatus('Tuli ei voi olla samassa ruudussa pelaajan, Nemesiksen tai gemin kanssa.');
+    return;
+  }
+
+  // Sallitaan: tyhjä ruutu TAI ruutu, jossa pinossa on vain lohkareita
+  const hasNonBoulder = cell.stack.some(o => o.type !== 'boulder');
+  if(hasNonBoulder){
+    setStatus('Tuli voidaan asettaa vain tyhjään ruutuun tai lohkareen ruutuun.');
+    return;
+  }
+
+  cell.floor = 'fire';
+  setStatus('Tuli lisätty ruutuun. Sallittu tyhjään ruutuun tai lohkareen ruutuun.');
+}
+
+function placePlayer(puzzle, x, y){
+  for(let yy=0;yy<HEIGHT;yy++){
+    for(let xx=0;xx<WIDTH;xx++){
+      puzzle.cells[yy][xx].player = false;
+    }
+  }
+  puzzle.cells[y][x].player = true;
+  setStatus(`Pelaajan lähtöruutu: (${x},${y})`);
+}
+
+function placeNemesis(puzzle, x, y){
+  for(let yy=0;yy<HEIGHT;yy++){
+    for(let xx=0;xx<WIDTH;xx++){
+      puzzle.cells[yy][xx].nemesis = false;
+    }
+  }
+  puzzle.cells[y][x].nemesis = true;
+  setStatus(`Nemesis ruudussa: (${x},${y})`);
+}
+
+function toggleGem(cell, x, y){
+  cell.gem = !cell.gem;
+  setStatus(cell.gem ? `Gem lisätty ruutuun (${x},${y}).` : `Gem poistettu ruudusta (${x},${y}).`);
+}
+
+function applyCellClick(x,y){
+  const puzzle = getCurrentPuzzle();
+  const cell = puzzle.cells[y][x];
+
+  if(currentTool === 'fire'){
+    toggleFire(cell);
+    render();
+    return;
+  }
+
+  if(currentTool === 'crate' || currentTool === 'ice' ||
+     currentTool === 'boulder' || currentTool === 'water'){
+    if(currentTool === 'boulder' && cell.floor === 'fire'){
+      setStatus('Lohkare ei voi olla tuliruutuun lisättynä (tuli asetetaan lohkareen ruutuun, ei päinvastoin).');
+      return;
+    }
+    if(!canPlaceOnStack(cell, currentTool)){
+      setStatus('Tähän pinoon ei voi lisätä valittua objektia (vesikannut vain päällekkäin, ei tuliruutuun).');
+      return;
+    }
+    cell.stack.push({ type: currentTool });
+    setStatus(`Lisätty ${currentTool} ruutuun (${x},${y}). Pinon korkeus nyt ${cell.stack.length}.`);
+    render();
+    return;
+  }
+
+  if(currentTool === 'removeTop'){
+    if(cell.stack.length > 0){
+      const removed = cell.stack.pop();
+      setStatus(`Poistettu ylin (${removed.type}) ruudusta (${x},${y}).`);
+    } else {
+      setStatus('Pinossa ei ole mitään poistettavaa.');
+    }
+    render();
+    return;
+  }
+
+  if(currentTool === 'clearCell'){
+    cell.stack = [];
+    cell.floor = 'normal';
+    cell.gem = false;
+    cell.player = false;
+    cell.nemesis = false;
+    setStatus(`Ruutu (${x},${y}) tyhjennetty.`);
+    render();
+    return;
+  }
+
+  if(currentTool === 'player'){
+    placePlayer(puzzle, x, y);
+    render();
+    return;
+  }
+
+  if(currentTool === 'nemesis'){
+    placeNemesis(puzzle, x, y);
+    render();
+    return;
+  }
+
+  if(currentTool === 'gem'){
+    toggleGem(cell, x, y);
+    render();
+    return;
+  }
+}
+
+/* ----- työkalut ----- */
+function setTool(tool){
+  currentTool = tool;
+  document.querySelectorAll('.tools button').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.tool === tool);
+  });
+}
+
+/* ----- pulmien hallinta ----- */
+function goToPuzzle(index){
+  if(index < 0 || index >= levelSet.puzzles.length) return;
+  currentPuzzleIndex = index;
+  setStatus(`Muokataan pulmaa ${currentPuzzleIndex+1}/${levelSet.puzzles.length}.`);
+  render();
+}
+
+function addPuzzle(){
+  const n = levelSet.puzzles.length + 1;
+  levelSet.puzzles.push(createEmptyPuzzle(`Pulma ${n}`));
+  currentPuzzleIndex = levelSet.puzzles.length - 1;
+  render();
+  setStatus(`Lisättiin uusi pulma ${n}.`);
+}
+
+function deletePuzzle(){
+  if(levelSet.puzzles.length <= 1){
+    setStatus('Et voi poistaa ainoaa pulmaa.');
+    return;
+  }
+  levelSet.puzzles.splice(currentPuzzleIndex,1);
+  if(currentPuzzleIndex >= levelSet.puzzles.length){
+    currentPuzzleIndex = levelSet.puzzles.length - 1;
+  }
+  render();
+  setStatus('Pulma poistettu.');
+}
+
+/* ----- JSON-vienti / tekstikenttä ----- */
+function exportJson(){
+  // varmista että kaikilla pulmilla on goals
+  levelSet.puzzles.forEach(ensureGoalsForPuzzle);
+  const out = {
+    width: levelSet.width,
+    height: levelSet.height,
+    puzzles: levelSet.puzzles
+  };
+  document.getElementById('jsonOut').value = JSON.stringify(out, null, 2);
+  setStatus('JSON päivitetty tekstikenttään.');
+}
+
+function copyJson(){
+  const ta = document.getElementById('jsonOut');
+  ta.select();
+  ta.setSelectionRange(0, ta.value.length);
+  try{
+    document.execCommand('copy');
+    setStatus('JSON kopioitu leikepöydälle.');
+  } catch(e){
+    setStatus('Kopiointi ei onnistunut, kopioi tekstistä käsin.');
+  }
+}
+
+function importJsonFromTextarea(){
+  const text = document.getElementById('jsonOut').value.trim();
+  if(!text){
+    setStatus('JSON-tekstikenttä on tyhjä.');
+    return;
+  }
+  try{
+    const parsed = JSON.parse(text);
+    if(parsed.width !== WIDTH || parsed.height !== HEIGHT){
+      setStatus('JSON:ssa leveys/korkeus ei ole 5×8.');
+      return;
+    }
+    if(!Array.isArray(parsed.puzzles) || parsed.puzzles.length === 0){
+      setStatus('JSON:ssa ei ole yhtään pulmaa.');
+      return;
+    }
+    levelSet = parsed;
+    levelSet.puzzles.forEach(ensureGoalsForPuzzle);
+    currentPuzzleIndex = 0;
+    render();
+    setStatus(`JSON ladattu tekstikentästä: ${levelSet.puzzles.length} pulmaa.`);
+  } catch(e){
+    console.error(e);
+    setStatus('JSON:n jäsentäminen epäonnistui.');
+  }
+}
+
+/* ----- Tiedostoon tallennus / tiedostosta lataus ----- */
+
+function saveToFile(){
+  levelSet.puzzles.forEach(ensureGoalsForPuzzle);
+  const out = {
+    width: levelSet.width,
+    height: levelSet.height,
+    puzzles: levelSet.puzzles
+  };
+  const jsonStr = JSON.stringify(out, null, 2);
+  const blob = new Blob([jsonStr], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'rajavihara_puzzles.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  setStatus('Pulmat tallennettu tiedostoon rajavihara_puzzles.json.');
+}
+
+function loadFromFile(file){
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const text = e.target.result;
+      const parsed = JSON.parse(text);
+      if(parsed.width !== WIDTH || parsed.height !== HEIGHT){
+        setStatus('Ladatussa tiedostossa leveys/korkeus ei ole 5×8.');
+        return;
+      }
+      if(!Array.isArray(parsed.puzzles) || parsed.puzzles.length === 0){
+        setStatus('Ladatussa tiedostossa ei ole yhtään pulmaa.');
+        return;
+      }
+      levelSet = parsed;
+      levelSet.puzzles.forEach(ensureGoalsForPuzzle);
+      currentPuzzleIndex = 0;
+      render();
+      document.getElementById('jsonOut').value = JSON.stringify(parsed, null, 2);
+      setStatus(`Tiedosto ladattu: ${levelSet.puzzles.length} pulmaa.`);
+    } catch(err){
+      console.error(err);
+      setStatus('Tiedoston lukeminen epäonnistui (virheellinen JSON).');
+    }
+  };
+  reader.onerror = ()=>{
+    setStatus('Tiedoston lukeminen epäonnistui.');
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+/* ----- muut toiminnot ----- */
+function clearStacks(){
+  const puzzle = getCurrentPuzzle();
+  for(let y=0;y<HEIGHT;y++){
+    for(let x=0;x<WIDTH;x++){
+      puzzle.cells[y][x].stack = [];
+    }
+  }
+  setStatus('Kaikki pinot tyhjennetty tästä pulmasta.');
+  render();
+}
+
+function clearAll(){
+  const idx = currentPuzzleIndex;
+  const oldName = levelSet.puzzles[idx].name || `Pulma ${idx+1}`;
+  levelSet.puzzles[idx] = createEmptyPuzzle(oldName);
+  setStatus('Pulma palautettu tyhjäksi.');
+  render();
+}
+
+/* ----- init ----- */
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.querySelectorAll('.tools button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      setTool(btn.dataset.tool);
+    });
+  });
+
+  document.getElementById('board').addEventListener('click', (e)=>{
+    const cell = e.target.closest('.cell');
+    if(!cell) return;
+    const x = +cell.dataset.x;
+    const y = +cell.dataset.y;
+    applyCellClick(x,y);
+  });
+
+  document.getElementById('puzzleName').addEventListener('input', (e)=>{
+    getCurrentPuzzle().name = e.target.value;
+  });
+
+  const firesInput = document.getElementById('goalFires');
+  const cratesInput = document.getElementById('goalCrates');
+
+  if(firesInput){
+    firesInput.addEventListener('input', (e)=>{
+      const p = getCurrentPuzzle();
+      ensureGoalsForPuzzle(p);
+      p.goals.fires = +e.target.value || 0;
+    });
+  }
+
+  if(cratesInput){
+    cratesInput.addEventListener('input', (e)=>{
+      const p = getCurrentPuzzle();
+      ensureGoalsForPuzzle(p);
+      p.goals.crates = +e.target.value || 0;
+    });
+  }
+
+  document.getElementById('prevPuzzle').addEventListener('click', ()=>{
+    const idx = (currentPuzzleIndex - 1 + levelSet.puzzles.length) % levelSet.puzzles.length;
+    goToPuzzle(idx);
+  });
+  document.getElementById('nextPuzzle').addEventListener('click', ()=>{
+    const idx = (currentPuzzleIndex + 1) % levelSet.puzzles.length;
+    goToPuzzle(idx);
+  });
+  document.getElementById('addPuzzle').addEventListener('click', addPuzzle);
+  document.getElementById('deletePuzzle').addEventListener('click', deletePuzzle);
+
+  document.getElementById('clearStacks').addEventListener('click', clearStacks);
+  document.getElementById('clearAll').addEventListener('click', clearAll);
+
+  document.getElementById('exportJson').addEventListener('click', exportJson);
+  document.getElementById('copyJson').addEventListener('click', copyJson);
+  document.getElementById('importJson').addEventListener('click', importJsonFromTextarea);
+
+  document.getElementById('saveFile').addEventListener('click', saveToFile);
+  document.getElementById('loadFile').addEventListener('click', ()=>{
+    document.getElementById('fileInput').click();
+  });
+  document.getElementById('fileInput').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(file){
+      loadFromFile(file);
+      e.target.value = '';
+    }
+  });
+
+  // Varmista goals olemassa alussa
+  levelSet.puzzles.forEach(ensureGoalsForPuzzle);
+
+  render();
+  exportJson();
+  setStatus('Muokataan pulmaa 1/1. Valitse työkalu ja klikkaa ruutuja.');
+});
+</script>
+
+</body>
+</html>
