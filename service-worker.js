@@ -2,11 +2,10 @@ const CACHE_NAME = 'rajavihara-v1';
 const FILES_TO_CACHE = [
   './',
   './index.html',
-  './manifest.webmanifest',
+  './manifest.json',
   './pwa_icon_180.png',
   './pwa_icon_192.png',
   './pwa_icon_512.png',
-
   './rajavihara_puzzles.json'
 ];
 
