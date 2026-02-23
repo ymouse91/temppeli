@@ -679,6 +679,54 @@ body{ gap:4px; }
       touch-action: none;
     }
 
+/* ---------- Responsive control table ---------- */
+@media (max-width: 560px){
+
+  .ctrl-table,
+  .ctrl-table thead,
+  .ctrl-table tbody,
+  .ctrl-table th,
+  .ctrl-table td,
+  .ctrl-table tr{
+    display: block;
+    width: 100%;
+  }
+
+  .ctrl-table thead{
+    display: none;
+  }
+
+  .ctrl-table tr{
+    margin-bottom: 12px;
+    padding: 10px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px;
+  }
+
+  .ctrl-table td{
+    padding: 4px 0;
+    border: none;
+  }
+
+  .ctrl-table td:nth-child(1)::before{
+    content: "Laite: ";
+    font-weight: 700;
+    opacity: .7;
+  }
+
+  .ctrl-table td:nth-child(2)::before{
+    content: "Liike: ";
+    font-weight: 700;
+    opacity: .7;
+  }
+
+  .ctrl-table td:nth-child(3)::before{
+    content: "Työntö: ";
+    font-weight: 700;
+    opacity: .7;
+  }
+}
   </style>
 </head>
 <body>
