@@ -422,13 +422,17 @@
     }
   
     /* ---------- Topbar + Ohjeet ---------- */
-    .topbar{ width:100%; max-width: calc(5 * var(--cell) + 2*8px + 2*var(--gap)); display:flex; justify-content:center; }
-    .titleRow{ width:100%; display:flex; align-items:center; justify-content:center; gap:10px; }
+    .topbar{ width:100%; max-width: calc(5 * var(--cell) + 2*8px + 2*var(--gap)); display:flex; justify-content:center; margin-bottom: 0; }
+    .titleRow{ width:100%; display:flex; align-items:center; justify-content:center; gap:1px; }
     .titleRow h1{ margin:4px 0; flex: 0 1 auto; }
     button.main.ghost{
       background: transparent;
       border: 1px solid rgba(229,231,235,0.22);
     }
+
+body{ gap:4px; }
+.topbar + div button.main{ margin:2px; }
+
 
     /* ---------- Help modal ---------- */
     #helpModalBackdrop{
@@ -681,7 +685,7 @@
 
 <header class="topbar">
   <div class="titleRow">
-    <h1>Relics of Rajavihara</h1>
+    <h1>Rajavihara</h1>
     <button id="btnHelp" class="main ghost" aria-haspopup="dialog" aria-controls="helpModalBackdrop">Ohjeet</button>
   </div>
 </header>
