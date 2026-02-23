@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rajavihara-v1';
+const CACHE_NAME = 'rajavihara-v2';
 const FILES_TO_CACHE = [
   './',
   './index.html',
