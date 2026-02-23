@@ -4,6 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no" />
+		<!-- iOS PWA -liput -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<!-- Yleinen väriteema (safari, android ym.) -->
+<meta name="theme-color" content="#0F172A">
+
+<!-- Web manifesti (nimi voi olla myös manifest.json, jos niin olet tehnyt) -->
+<link rel="manifest" href="manifest.json">
+
+<!-- iOS:lle pitää olla erikseen apple-touch-icon -->
+<link rel="apple-touch-icon" sizes="180x180" href="./pwa_icon_180.png">
+
   <title>Relics of Rajavihara – Peli</title>
   <style>
     :root{
@@ -75,9 +88,6 @@
       opacity:0.8;
       pointer-events:none;
     }
-    .cell.fire{
-      background:radial-gradient(circle at center, #f97316 0%, #7f1d1d 55%, #111827 100%);
-    }
 
 
     .block{
@@ -91,7 +101,17 @@
     .block.ice{ background:var(--ice); }
     .block.boulder{ background:var(--boulder); }
     .block.water{ background:var(--water); }
-
+    .block.fire{ background:var(--fire); } 
+    .block.fire{
+      background:radial-gradient(circle at center, #f97316 0%, #7f1d1d 55%, #111827 100%);
+    }
+	.block.water{
+      background: linear-gradient(45deg,rgba(13, 13, 219, 1) 7%, rgba(5, 203, 242, 1) 100%);
+    }
+	.block.ice{
+	  background: radial-gradient(circle,rgba(170, 170, 170, 1) 5%, rgba(230, 235, 242, 1) 34%, rgba(170, 170, 170, 1) 86%);
+	  }
+	
     .stack{
       position:absolute;
       inset:6px;
@@ -145,6 +165,10 @@
     .seg.water{
       background:var(--water);
       color:#0f172a;
+    }
+    .seg.fire{
+      background:var(--fire);
+      color:#f9fafb;
     }
 
     .stack-count{
@@ -414,7 +438,7 @@
 </div>
 
 <script>
-// Rajavihara versio 0.10 – lähtökohta jatkokehitykselle
+// Rajavihara versio 0.10 + tulilaatikko-objekti
 
 const W = 5, H = 8;
 
@@ -510,7 +534,18 @@ function cloneState(src){
   };
 }
 
+// tulilaatikon tarkistus
+function topObj(cell){
+  if(!cell || cell.stack.length === 0) return null;
+  return cell.stack[cell.stack.length-1];
+}
+function cellTopIsFire(cell){
+  const t = topObj(cell);
+  return t && t.type === 'fire';
+}
+
 function buildStateFromPuzzle(puzzle){
+  // kloonataan puzzle-cells → state-cells
   const cells = cloneCellsForState(puzzle.cells);
   let px = 0, py = 0, found = false;
   let hasGem = false, hasNemesis = false;
@@ -519,12 +554,20 @@ function buildStateFromPuzzle(puzzle){
   for(let y=0;y<H;y++){
     for(let x=0;x<W;x++){
       const srcCell = puzzle.cells[y][x];
+      const cell    = cells[y][x];
+
       if(srcCell.player){
         px = x; py = y; found = true;
       }
       if(srcCell.gem) hasGem = true;
       if(srcCell.nemesis) hasNemesis = true;
-      if(srcCell.floor === 'fire') initialFires++;
+
+      // floor:"fire" → muutetaan tulilaatikoksi pinon päälle
+      if(srcCell.floor === 'fire'){
+        cell.stack.push({ type:'fire' });
+        cell.floor = 'normal';    // pelissä ei enää käytetä floor-tulta
+        initialFires++;
+      }
     }
   }
   if(!found){
@@ -618,15 +661,10 @@ function getH(x,y){
   return cell.stack.length;
 }
 
-function topObj(cell){
-  if(!cell || cell.stack.length === 0) return null;
-  return cell.stack[cell.stack.length-1];
-}
-
 function canStandOn(x,y){
   const cell = getCell(x,y);
   if(!cell) return false;
-  if(cell.floor === 'fire') return false;
+  if(cellTopIsFire(cell)) return false; // tulilaatikon päälle ei voi astua
   if(cell.nemesis) return false;
   const top = topObj(cell);
   if(top && top.type === 'water') return false;
@@ -634,9 +672,10 @@ function canStandOn(x,y){
 }
 
 function canPlaceOnStack(cell, type){
-  if(cell.floor === 'fire') return false;
+  if(cellTopIsFire(cell)) return false; // tulilaatikon päälle ei voi pudottaa mitään
   const hasWater = cell.stack.some(o => o.type === 'water');
   if(hasWater){
+    // vain vesi veden päälle
     return type === 'water';
   }
   return true;
@@ -727,6 +766,9 @@ function move(dx,dy){
 /* jääkuution liuku
    fromHeight = se korkeus (z), jossa jääkuutio liikkuu (1,2,3,...)
 */
+/* jääkuution liuku
+   fromHeight = se korkeus (z), jossa jääkuutio liikkuu (1,2,3,...)
+*/
 function slideIce(sx,sy,dx,dy,fromHeight){
   let cx = sx;
   let cy = sy;
@@ -750,39 +792,40 @@ function slideIce(sx,sy,dx,dy,fromHeight){
     const nextH = nextCell.stack.length;
     const hasBoulder = nextCell.stack.some(o => o.type === 'boulder');
 
-    // UUSI SÄÄNTÖ:
-    // Jos liikutaan kohti lohkaretta ja lohkareen ruudun korkeus on
-    // vähintään sama kuin jääkuution korkeus -> pysähdytään ETEN
-    // (eli ei mennä samaan ruutuun)
+    // Lohkare estää jos ruudun korkeus >= jään korkeus
     if(hasBoulder && nextH >= fromHeight){
-      // jos ei ole vielä ehditty liikkua yhtään, tulkitaan esto
       if(!moved){
         return { type:'blocked' };
-      }else{
+      } else {
         return { type:'land', x:cx, y:cy };
       }
     }
 
-    // Tuliruutu ilman lohkare-estettä: jää sulaa
-    if(nextCell.floor === 'fire'){
-      return { type:'fire', x:nx, y:ny };
-    }
+    // *** UUSI TULILOGIIKKA ***
+    // Jos pinossa on vain tulta -> jää sulaa
+    const hasStack = nextH > 0;
+    if(hasStack){
+      const allFire = nextCell.stack.every(o => o.type === 'fire');
 
-    // Muu pino edessä: ei voi mennä
-// Pino edessä -> jääkappale pysähtyy siihen viereiseen ruutuun (land)
-if(nextCell.stack.length > 0){
-    if(!moved){
+      if(allFire){
+        // puhdas tulipino: jää sulaa
+        return { type:'fire', x:nx, y:ny };
+      }
+
+      // Muuten normaali pinologiikka:
+      // Pino edessä -> jääkappale pysähtyy siihen viereiseen ruutuun (land)
+      if(!moved){
         // saa SILTI mennä, jos kohdepinon korkeus < jään korkeus
         if(nextH < fromHeight){
-            return { type:'land', x:nx, y:ny };
+          return { type:'land', x:nx, y:ny };
         }
         return { type:'blocked' };
-    } else {
+      } else {
         return { type:'land', x:cx, y:cy };
+      }
     }
-}
 
-
+    // Ei pinoa, ei lohkaretta -> jatka liukua
     cx = nx;
     cy = ny;
     moved = true;
@@ -793,6 +836,7 @@ if(nextCell.stack.length > 0){
   }
   return { type:'land', x:cx, y:cy };
 }
+
 
 function push(dx,dy){
   saveStateForUndo();
@@ -907,28 +951,21 @@ function push(dx,dy){
     return;
   }
 
-  // Pino edessä: ei saa työntää samaan tai korkeampaan tasoon
-  if(cellT.stack.length > 0 && effectiveFromHeight <= hTarget){
-    setStatus("Samalla tai ylemmällä tasolla olevaa pinoa ei voi työntää.");
-    history.pop();
-    return;
-  }
+  // TULILAATIKKO (tuli stackin päällä)
+  if(cellTopIsFire(cellT)){
+    const fireIndex = cellT.stack.length - 1;
 
-  // TULIRUUTU
-  if(cellT.floor === 'fire'){
     if(obj.type === 'water'){
-      // Vesi sammuttaa tulen (käsitellään objektina, mutta datassa lattiatyyppinä)
-      cellS.stack.splice(levelIndex,1);
-      if(cellT.floor === 'fire'){
-        cellT.floor = 'normal';
-        state.stats.firesExtinguished++;
-      }
+      // vesi + tuli -> molemmat pois
+      cellS.stack.splice(levelIndex,1);   // poista vesi
+      cellT.stack.splice(fireIndex,1);    // poista tuli
+      state.stats.firesExtinguished++;
       setStatus("Vesi sammutti tulen.");
       render();
       checkGoals();
       return;
     } else if(obj.type === 'crate' || obj.type === 'ice'){
-      // Laatikko / jääkuutio tuhoutuu, tuli säilyy
+      // laatikko/jää tuhoutuu, tuli jää
       cellS.stack.splice(levelIndex,1);
       if(obj.type === 'crate'){
         state.stats.cratesDestroyed++;
@@ -942,6 +979,13 @@ function push(dx,dy){
       history.pop();
       return;
     }
+  }
+
+  // Pino edessä: ei saa työntää samaan tai korkeampaan tasoon
+  if(cellT.stack.length > 0 && effectiveFromHeight <= hTarget){
+    setStatus("Samalla tai ylemmällä tasolla olevaa pinoa ei voi työntää.");
+    history.pop();
+    return;
   }
 
   if(!canPlaceOnStack(cellT, obj.type)){
@@ -985,6 +1029,7 @@ function labelForType(t){
   if(t === "ice") return "I";
   if(t === "boulder") return "B";
   if(t === "water") return "W";
+  if(t === "fire") return "F";
   return "?";
 }
 
@@ -999,10 +1044,6 @@ function render(){
       cell.className = "cell";
       cell.dataset.x = x;
       cell.dataset.y = y;
-
-      if(cellData.floor === 'fire'){
-        cell.classList.add("fire");
-      }
 
       const stack = cellData.stack;
       const h = stack.length;
@@ -1305,6 +1346,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // Jos lataus epäonnistuu, käytetään DEFAULT_LEVELSET:iä.
   loadLevelSetFromUrl('rajavihara_puzzles.json');
 });
+
+// PWA: service worker iOS/Android/desktopille
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('./service-worker.js')
+      .catch(err => console.warn('Service workerin rekisteröinti epäonnistui:', err));
+  });
+}
+
 </script>
 
 </body>
